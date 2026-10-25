@@ -4,7 +4,8 @@ name: Build ILMN APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -12,6 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -23,19 +25,41 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Install SDK packages
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
+      - name: Verify project ZIP
+        run: |
+          if [ ! -f "ILMN-Android-GitHub-Upload.zip" ]; then
+            echo "ERROR: ILMN-Android-GitHub-Upload.zip was not found in the repository root."
+            echo "Repository files:"
+            ls -la
+            exit 1
+          fi
+
       - name: Extract project ZIP
         run: |
+          mkdir -p project
           unzip -o ILMN-Android-GitHub-Upload.zip -d project
+
+      - name: Verify Android project
+        run: |
+          echo "Checking extracted project..."
+          find project -maxdepth 3 \( -name "settings.gradle" -o -name "settings.gradle.kts" -o -name "build.gradle" -o -name "build.gradle.kts" \)
+          if [ ! -f "project/settings.gradle" ] && [ ! -f "project/settings.gradle.kts" ]; then
+            echo "ERROR: Gradle settings file was not found directly inside project/."
+            echo "The ZIP may contain an extra parent directory."
+            find project -maxdepth 4 -type f | head -200
+            exit 1
+          fi
 
       - name: Build APK
         run: |
